@@ -126,6 +126,23 @@ pub fn load_localization(
     arena_english.extend(arena_translated);
     arena_english.extend(english);
     arena_english.extend(translated);
+    // Mod string tables fill in names the game does not define (for example
+    // mod quirks). They never replace game text, so a disabled mod cannot
+    // rename base content.
+    for path in mod_localization_files(&game_path) {
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            let mut mod_english = HashMap::new();
+            parse_string_table(&content, &mut mod_english, "english");
+            let mut mod_selected = HashMap::new();
+            if language != "english" {
+                parse_string_table(&content, &mut mod_selected, &language);
+            }
+            for (key, value) in mod_english.into_iter() {
+                let shown = mod_selected.remove(&key).unwrap_or_else(|| value.clone());
+                arena_english.entry(key.clone()).or_insert(shown);
+            }
+        }
+    }
     Ok(LocalizationTables {
         table: arena_english,
         english: search_english,
@@ -150,6 +167,29 @@ pub fn available_game_text_languages(game_path: String) -> Vec<String> {
         .filter(|id| found.contains(**id))
         .map(|id| id.to_string())
         .collect()
+}
+
+/// `*.string_table.xml` files directly inside each installed mod's `localization` folder.
+fn mod_localization_files(game_path: &str) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for (_, dir) in super::mods::installed_mod_folders(game_path) {
+        if let Ok(entries) = std::fs::read_dir(dir.join("localization")) {
+            let mut paths: Vec<_> = entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.is_file()
+                        && path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| name.ends_with(".string_table.xml"))
+                })
+                .collect();
+            paths.sort();
+            files.extend(paths);
+        }
+    }
+    files
 }
 
 fn localization_files(root: &Path) -> Vec<PathBuf> {

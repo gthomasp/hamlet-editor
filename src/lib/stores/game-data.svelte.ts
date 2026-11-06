@@ -15,6 +15,8 @@ import type { ClassSkills, ClassStats, QuirkDef, TrinketDef, RosterCapacityRules
 let display = $state<{ table: Record<string, string>; english: Record<string, string>; language: keyof typeof GAME_TEXT_LOCALES; gamePath: string }>({ table: {}, english: {}, language: 'english', gamePath: '' });
 let localizationLoaded = $state(false);
 let quirks = $state<QuirkDef[]>([]);
+/** Mod folder names enabled in the loaded save; null until a save is loaded. */
+let enabledMods = $state<Set<string> | null>(null);
 let trinkets = $state<TrinketDef[]>([]);
 let classStats = $state<ClassStats[]>([]);
 let classSkills = $state<ClassSkills[]>([]);
@@ -37,6 +39,9 @@ export function getGameData() {
 		},
 		get quirks() {
 			return quirks;
+		},
+		get enabledMods() {
+			return enabledMods;
 		},
 		get trinkets() {
 			return trinkets;
@@ -69,6 +74,11 @@ export function localizeEnglish(key: string, fallback = snakeToTitle(key)): stri
 export function setNameTable(table: Record<string, string>, language: keyof typeof GAME_TEXT_LOCALES = 'english', gamePath = '', english: Record<string, string> = language === 'english' ? table : {}) {
 	display = { table, english, language, gamePath };
 	localizationLoaded = true;
+}
+
+/** Record which mods the loaded save has enabled (from persist.game.json applied_ugcs_1_0). */
+export function setEnabledMods(mods: Set<string> | null) {
+	enabledMods = mods;
 }
 
 /** Replace the loaded quirk definitions. */
@@ -125,6 +135,7 @@ export function resetGameData() {
 	display = { table: {}, english: {}, language: 'english', gamePath: '' };
 	localizationLoaded = false;
 	quirks = [];
+	enabledMods = null;
 	trinkets = [];
 	classStats = [];
 	classSkills = [];

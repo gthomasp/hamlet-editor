@@ -26,6 +26,8 @@ export interface QuirkDef {
 	id: string;
 	is_positive: boolean;
 	is_disease: boolean;
+	/** Mod folder (Workshop ID or local folder) that defines the quirk; absent for base game and DLC. */
+	source_mod?: string;
 }
 
 export interface TrinketDef {

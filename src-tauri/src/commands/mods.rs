@@ -55,6 +55,33 @@ pub fn scan_mod_directories(
     Ok(mods)
 }
 
+/// Installed mod folders as `(folder name, path)`: local `<game>/mods/*` first,
+/// then Steam Workshop items, each group sorted by folder name. The folder name
+/// is what the save's `applied_ugcs_1_0` list records (the Workshop ID for
+/// Workshop items), so callers can match definitions to enabled mods.
+pub fn installed_mod_folders(game_path: &str) -> Vec<(String, PathBuf)> {
+    let mut out: Vec<(String, PathBuf)> = Vec::new();
+    let mut seen: HashSet<PathBuf> = HashSet::new();
+    let mut push_children = |dir: &Path, out: &mut Vec<(String, PathBuf)>| {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let mut dirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        dirs.sort();
+        for path in dirs {
+            if !seen.insert(path.clone()) {
+                continue;
+            }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                out.push((name.to_string(), path.clone()));
+            }
+        }
+    };
+    push_children(&Path::new(game_path).join("mods"), &mut out);
+    for workshop in workshop_content_dirs(None) {
+        push_children(&workshop, &mut out);
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------

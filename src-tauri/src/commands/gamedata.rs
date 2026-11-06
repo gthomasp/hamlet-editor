@@ -28,6 +28,10 @@ pub struct QuirkDef {
     pub id: String,
     pub is_positive: bool,
     pub is_disease: bool,
+    /// Mod folder (Workshop ID or local folder name) that defines this quirk;
+    /// `None` for base game and DLC quirks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_mod: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -135,7 +139,61 @@ pub fn load_quirk_library(game_path: String) -> Result<Vec<QuirkDef>, AppError> 
     let com = data_root.join("dlc/735730_color_of_madness/shared/quirk/com.quirk_library.json");
     parse_quirk_library(&com, &mut quirks);
 
-    Ok(quirks)
+    // Installed mods (local and Workshop). The frontend hides quirks from mods
+    // the loaded save has not enabled.
+    for (folder, path) in super::mods::installed_mod_folders(&game_path) {
+        let start = quirks.len();
+        for file in mod_quirk_libraries(&path) {
+            parse_quirk_library(&file, &mut quirks);
+        }
+        for quirk in &mut quirks[start..] {
+            quirk.source_mod = Some(folder.clone());
+        }
+    }
+
+    Ok(dedupe_last_wins(quirks))
+}
+
+/// Quirk library files inside one mod folder, sorted (`*.quirk_library.json`).
+fn mod_quirk_libraries(mod_dir: &Path) -> Vec<PathBuf> {
+    fn visit(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
+        if depth > 6 {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                visit(&path, depth + 1, out);
+            } else if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.ends_with("quirk_library.json"))
+            {
+                out.push(path);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    visit(mod_dir, 0, &mut out);
+    out.sort();
+    out
+}
+
+/// Keep one definition per id; a later definition (a mod) replaces an earlier one
+/// in place, matching the game's last-match rule for quirks.
+fn dedupe_last_wins(quirks: Vec<QuirkDef>) -> Vec<QuirkDef> {
+    let mut index: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut out: Vec<QuirkDef> = Vec::new();
+    for quirk in quirks {
+        if let Some(&i) = index.get(&quirk.id) {
+            out[i] = quirk;
+        } else {
+            index.insert(quirk.id.clone(), out.len());
+            out.push(quirk);
+        }
+    }
+    out
 }
 
 /// Load all trinket definitions from the game's trinket JSON files.
@@ -383,6 +441,7 @@ fn parse_quirk_library(path: &Path, out: &mut Vec<QuirkDef>) {
             id,
             is_positive,
             is_disease,
+            source_mod: None,
         });
     }
 }
@@ -621,5 +680,39 @@ mod error_tests {
             AppError::new("roster_capacity_missing")
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod mod_quirk_tests {
+    use super::*;
+
+    fn write(path: &Path, text: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn loads_quirks_from_local_mods_and_tags_their_folder() {
+        let root = std::env::temp_dir().join(format!("hamlet-modquirks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        write(
+            &root.join("shared/quirk/quirk_library.json"),
+            r#"{"quirks":[{"id":"tough","is_positive":true,"is_disease":false},{"id":"fragile","is_positive":false,"is_disease":false}]}"#,
+        );
+        write(
+            &root.join("mods/931347382/shared/quirk/MarleyQuirkMod.quirk_library.json"),
+            r#"{"quirks":[{"id":"warrior_training","is_positive":true,"is_disease":false},{"id":"fragile","is_positive":false,"is_disease":true}]}"#,
+        );
+        let quirks = load_quirk_library(root.to_string_lossy().into_owned()).unwrap();
+        let get = |id: &str| quirks.iter().find(|q| q.id == id).unwrap();
+        assert_eq!(get("tough").source_mod, None);
+        assert_eq!(get("warrior_training").source_mod.as_deref(), Some("931347382"));
+        assert!(get("warrior_training").is_positive);
+        // A mod redefinition replaces the base entry instead of duplicating it.
+        assert_eq!(quirks.iter().filter(|q| q.id == "fragile").count(), 1);
+        assert!(get("fragile").is_disease);
+        assert_eq!(get("fragile").source_mod.as_deref(), Some("931347382"));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

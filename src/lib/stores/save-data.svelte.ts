@@ -20,7 +20,7 @@ import { loadProfile } from '#lib/api/save.js';
 import { readTreatmentSlots, clearTreatmentSlot } from '#lib/treatment.js';
 import { stripDsonPrefix } from '#lib/utils.js';
 import { getSettings } from '#lib/stores/settings.svelte.js';
-import { getGameData, getMaxHp as getGameDataMaxHp } from '#lib/stores/game-data.svelte.js';
+import { getGameData, getMaxHp as getGameDataMaxHp, setEnabledMods } from '#lib/stores/game-data.svelte.js';
 import {
 	TREATMENT_BUILDINGS,
 	BUILDING_ACTIVITIES,
@@ -806,6 +806,19 @@ export function loadRaid(data: RaidData) {
 export function loadGame(data: GameData) {
 	game = data;
 	gameSnapshot = JSON.stringify(data);
+	setEnabledMods(readEnabledMods(data));
+}
+
+/** Mod folder names from `base_root.applied_ugcs_1_0` (`{ "0": { name, source } }`); null if absent. */
+export function readEnabledMods(data: GameData | null): Set<string> | null {
+	const list = data?.base_root?.applied_ugcs_1_0;
+	if (!list || typeof list !== 'object') return null;
+	const names = new Set<string>();
+	for (const entry of Object.values(list as Record<string, unknown>)) {
+		const name = (entry as { name?: unknown } | null)?.name;
+		if (typeof name === 'string' && name) names.add(name);
+	}
+	return names;
 }
 
 /** Load campaign_log data into the store. */

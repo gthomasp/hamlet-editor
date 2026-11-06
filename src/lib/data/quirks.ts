@@ -259,9 +259,21 @@ export function getQuirkCategory(quirkId: string): QuirkCategory {
 	return 'negative';
 }
 
+/**
+ * Filter definitions to the base game, DLC, and mods enabled in the loaded save.
+ * If no save is loaded, or the save's enabled list matches none of the installed
+ * mod folders (an unexpected format), every installed mod's quirks stay visible.
+ */
+export function availableQuirkDefs<T extends { source_mod?: string }>(defs: readonly T[], enabled: Set<string> | null): T[] {
+	if (enabled === null) return [...defs];
+	const recognized = defs.some((d) => d.source_mod !== undefined && enabled.has(d.source_mod));
+	if (!recognized) return [...defs];
+	return defs.filter((d) => d.source_mod === undefined || enabled.has(d.source_mod));
+}
+
 /** Get all known quirks as QuirkInfo[], grouped by category. */
 export function getAllQuirks(): QuirkInfo[] {
-	const defs = getGameData().quirks;
+	const defs = availableQuirkDefs(getGameData().quirks, getGameData().enabledMods);
 	const ids = defs.length
 		? defs.map((q) => q.id)
 		: [...POSITIVE_QUIRK_IDS, ...NEGATIVE_QUIRK_IDS, ...DISEASE_IDS];
