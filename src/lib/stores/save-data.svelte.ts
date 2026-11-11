@@ -812,7 +812,7 @@ export function loadGame(data: GameData) {
 /** Mod folder names from `base_root.applied_ugcs_1_0` (`{ "0": { name, source } }`); null if absent. */
 export function readEnabledMods(data: GameData | null): Set<string> | null {
 	const list = data?.base_root?.applied_ugcs_1_0;
-	if (!list || typeof list !== 'object') return null;
+	if (!(list instanceof Object)) return null;
 	const names = new Set<string>();
 	for (const entry of Object.values(list as Record<string, unknown>)) {
 		const name = (entry as { name?: unknown } | null)?.name;

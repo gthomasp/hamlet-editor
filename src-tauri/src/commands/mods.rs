@@ -63,8 +63,14 @@ pub fn installed_mod_folders(game_path: &str) -> Vec<(String, PathBuf)> {
     let mut out: Vec<(String, PathBuf)> = Vec::new();
     let mut seen: HashSet<PathBuf> = HashSet::new();
     let mut push_children = |dir: &Path, out: &mut Vec<(String, PathBuf)>| {
-        let Ok(entries) = std::fs::read_dir(dir) else { return };
-        let mut dirs: Vec<PathBuf> = entries.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut dirs: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
         dirs.sort();
         for path in dirs {
             if !seen.insert(path.clone()) {

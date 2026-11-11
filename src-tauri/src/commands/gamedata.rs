@@ -160,7 +160,9 @@ fn mod_quirk_libraries(mod_dir: &Path) -> Vec<PathBuf> {
         if depth > 6 {
             return;
         }
-        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
@@ -707,7 +709,10 @@ mod mod_quirk_tests {
         let quirks = load_quirk_library(root.to_string_lossy().into_owned()).unwrap();
         let get = |id: &str| quirks.iter().find(|q| q.id == id).unwrap();
         assert_eq!(get("tough").source_mod, None);
-        assert_eq!(get("warrior_training").source_mod.as_deref(), Some("931347382"));
+        assert_eq!(
+            get("warrior_training").source_mod.as_deref(),
+            Some("931347382")
+        );
         assert!(get("warrior_training").is_positive);
         // A mod redefinition replaces the base entry instead of duplicating it.
         assert_eq!(quirks.iter().filter(|q| q.id == "fragile").count(), 1);
